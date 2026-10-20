@@ -1,0 +1,8 @@
+{
+  "name": "omnirecon-osint-hub",
+  "version": "1.0.0",
+  "description": "All-in-One Passive OSINT & Domain Intelligence Dashboard",
+  "type": "module",
+  "private": false,
+  "license": "MIT"
+}
