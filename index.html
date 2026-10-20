@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OmniRecon | Domain & Infrastructure OSINT Hub</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans">
+  <header class="border-b border-slate-800 bg-slate-900/60 backdrop-blur sticky top-0 z-10">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <span class="h-3 w-3 rounded-full bg-emerald-400 animate-pulse"></span>
+        <h1 class="text-xl font-bold tracking-tight text-white">
+          OmniRecon <span class="text-xs font-mono text-emerald-400 bg-emerald-950/80 border border-emerald-800 px-2 py-0.5 rounded ml-2">OSINT Aggregator</span>
+        </h1>
+      </div>
+      <form id="osintForm" class="flex w-full sm:w-auto gap-2">
+        <input id="domainInput" type="text" placeholder="Enter domain (e.g., example.com)" required class="w-full sm:w-80 px-4 py-2 rounded-lg bg-slate-950 border border-slate-700 text-sm focus:outline-none focus:border-emerald-500 font-mono" />
+        <button type="submit" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-sm rounded-lg transition">Analyze Target</button>
+      </form>
+    </div>
+  </header>
+  <main class="max-w-7xl mx-auto px-4 py-8 space-y-6">
+    <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4 text-xs text-slate-400 flex items-center justify-between">
+      <span>Passive Open-Source Intelligence (OSINT) aggregator querying public administrative registries (DoH, RDAP, CT Logs, and HTTP metadata).</span>
+      <span id="statusBadge" class="font-mono text-slate-500">Idle</span>
+    </div>
+    <section class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+      <h2 class="text-sm font-semibold uppercase tracking-wider text-emerald-400 mb-3">External OSINT Pivot Hub (One-Click Launchers)</h2>
+      <div id="pivotLinks" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2.5 text-xs">
+        <p class="text-slate-500 col-span-full">Enter a domain above to generate direct investigation links.</p>
+      </div>
+    </section>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <section class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+        <h2 class="text-sm font-semibold uppercase tracking-wider text-emerald-400 mb-3">DNS Records (DNS-over-HTTPS)</h2>
+        <div id="dnsOutput" class="space-y-2 text-xs font-mono text-slate-300 max-h-80 overflow-y-auto"><p class="text-slate-500 font-sans">Awaiting target domain...</p></div>
+      </section>
+      <section class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+        <h2 class="text-sm font-semibold uppercase tracking-wider text-emerald-400 mb-3">HTTP Security Headers & Server Profile</h2>
+        <div id="headersOutput" class="space-y-2 text-xs text-slate-300 max-h-80 overflow-y-auto"><p class="text-slate-500">Awaiting target domain...</p></div>
+      </section>
+      <section class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+        <h2 class="text-sm font-semibold uppercase tracking-wider text-emerald-400 mb-3">RDAP Registration & Network ASN</h2>
+        <div id="rdapOutput" class="space-y-2 text-xs font-mono text-slate-300 max-h-80 overflow-y-auto"><p class="text-slate-500 font-sans">Awaiting target domain...</p></div>
+      </section>
+      <section class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+        <h2 class="text-sm font-semibold uppercase tracking-wider text-emerald-400 mb-3">Subdomains & TLS Certificates (CT Logs)</h2>
+        <div id="ctOutput" class="space-y-2 text-xs font-mono text-slate-300 max-h-80 overflow-y-auto"><p class="text-slate-500 font-sans">Awaiting target domain...</p></div>
+      </section>
+    </div>
+  </main>
+  <script>
+    const form = document.getElementById('osintForm');
+    const domainInput = document.getElementById('domainInput');
+    const statusBadge = document.getElementById('statusBadge');
+
+    function sanitizeDomain(input) {
+      return input.trim().replace(/^(https?:\/\/)?(www\.)?/i, '').split('/')[0].toLowerCase();
+    }
+
+    function renderPivotLinks(domain) {
+      const tools = [
+        { name: 'VirusTotal', url: `https://www.virustotal.com/gui/domain/${domain}` },
+        { name: 'Shodan Search', url: `https://www.shodan.io/search?query=hostname:${domain}` },
+        { name: 'URLScan.io', url: `https://urlscan.io/search/#domain:${domain}` },
+        { name: 'crt.sh Full Log', url: `https://crt.sh/?q=${domain}` },
+        { name: 'Wayback Machine', url: `https://web.archive.org/web/*/${domain}` },
+        { name: 'SecurityTrails', url: `https://securitytrails.com/domain/${domain}/dns` },
+        { name: 'Censys Search', url: `https://search.censys.io/search?resource=hosts&q=${domain}` },
+        { name: 'BGP / ASN View', url: `https://bgp.he.net/dns/${domain}` },
+        { name: 'SSL Labs Test', url: `https://www.ssllabs.com/ssltest/analyze.html?d=${domain}` },
+        { name: 'BuiltWith Tech', url: `https://builtwith.com/${domain}` },
+        { name: 'MXToolbox', url: `https://mxtoolbox.com/SuperTool.aspx?action=mx%3a${domain}` },
+        { name: 'OSINT Framework', url: `https://osintframework.com/` }
+      ];
+      document.getElementById('pivotLinks').innerHTML = tools.map(t => `
+        <a href="${t.url}" target="_blank" rel="noopener noreferrer" class="bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-emerald-500/50 rounded-lg p-2.5 text-center font-medium text-slate-200 transition flex items-center justify-center gap-1">
+          <span>${t.name}</span><span class="text-emerald-400">↗</span>
+        </a>`).join('');
+    }
+
+    async function fetchDNS(domain) {
+      const types = ['A', 'AAAA', 'MX', 'NS', 'TXT'];
+      const output = document.getElementById('dnsOutput');
+      output.innerHTML = '<p class="text-slate-400">Querying Cloudflare DoH...</p>';
+      let html = '', resolvedIp = null;
+      for (const type of types) {
+        try {
+          const res = await fetch(`https://cloudflare-dns.com/dns-query?name=${domain}&type=${type}`, { headers: { 'accept': 'application/dns-json' } });
+          const data = await res.json();
+          if (data.Answer) {
+            data.Answer.forEach(record => {
+              if (type === 'A' && !resolvedIp) resolvedIp = record.data;
+              html += `<div class="p-2 bg-slate-950 rounded border border-slate-800/80"><span class="text-emerald-400 font-bold mr-2">[${type}]</span><span class="break-all">${record.data}</span><span class="text-slate-500 float-right">TTL: ${record.TTL}s</span></div>`;
+            });
+          }
+        } catch (e) {}
+      }
+      output.innerHTML = html || '<p class="text-amber-400">No standard DNS records found.</p>';
+      return resolvedIp;
+    }
+
+    async function fetchRDAPAndIP(domain, ip) {
+      const output = document.getElementById('rdapOutput');
+      output.innerHTML = '<p class="text-slate-400">Querying RDAP & IP registry...</p>';
+      let html = '';
+      try {
+        const rdapRes = await fetch(`https://rdap.org/domain/${domain}`);
+        if (rdapRes.ok) {
+          const rdap = await rdapRes.json();
+          const events = (rdap.events || []).map(e => `${e.eventAction}: ${new Date(e.eventDate).toLocaleDateString()}`).join(' | ');
+          const status = (rdap.status || []).join(', ');
+          html += `<div class="p-2.5 bg-slate-950 rounded border border-slate-800 space-y-1"><div><span class="text-slate-400">Handle:</span> ${rdap.handle || 'N/A'}</div><div><span class="text-slate-400">Status:</span> <span class="text-emerald-400">${status || 'N/A'}</span></div><div><span class="text-slate-400">Timeline:</span> ${events || 'N/A'}</div></div>`;
+        }
+      } catch (e) {
+        html += `<div class="p-2 bg-slate-950 rounded border border-slate-800 text-slate-400">RDAP lookup restricted by TLD.</div>`;
+      }
+      if (ip) {
+        try {
+          const ipRes = await fetch(`https://ipwho.is/${ip}`);
+          const ipData = await ipRes.json();
+          if (ipData.success) {
+            html += `<div class="p-2.5 bg-slate-950 rounded border border-slate-800 space-y-1 mt-2"><div><span class="text-slate-400">Resolved IP:</span> <span class="text-emerald-400">${ip}</span></div><div><span class="text-slate-400">ASN / ISP:</span> AS${ipData.connection?.asn || ''} (${ipData.connection?.isp || 'Unknown'})</div><div><span class="text-slate-400">Location:</span> ${ipData.city}, ${ipData.country} (${ipData.country_code})</div></div>`;
+          }
+        } catch (e) {}
+      }
+      output.innerHTML = html || '<p class="text-amber-400">No registration data available.</p>';
+    }
+
+    async function fetchHeaders(domain) {
+      const output = document.getElementById('headersOutput');
+      output.innerHTML = '<p class="text-slate-400 font-mono">Inspecting HTTP security headers...</p>';
+      try {
+        const res = await fetch(`/api/headers?domain=${encodeURIComponent(domain)}`);
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        let html = `<div class="p-2.5 bg-slate-950 rounded border border-slate-800 font-mono mb-2 space-y-1"><div><span class="text-slate-400">Server:</span> ${data.server}</div><div><span class="text-slate-400">X-Powered-By:</span> ${data.poweredBy}</div></div>`;
+        html += data.audit.map(item => `<div class="flex items-center justify-between p-2 bg-slate-950 rounded border border-slate-800"><span class="font-medium">${item.label}</span><span class="px-2 py-0.5 rounded text-[11px] font-mono ${item.present ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-rose-950 text-rose-400 border border-rose-800'}">${item.present ? 'PRESENT' : 'MISSING'}</span></div>`).join('');
+        output.innerHTML = html;
+      } catch (e) {
+        output.innerHTML = `<p class="text-amber-400 font-mono">Header audit skipped (${e.message}). Deploy on Vercel to activate /api/headers.</p>`;
+      }
+    }
+
+    async function fetchCTLogs(domain) {
+      const output = document.getElementById('ctOutput');
+      output.innerHTML = '<p class="text-slate-400">Querying crt.sh Certificate Transparency logs...</p>';
+      try {
+        const res = await fetch(`https://crt.sh/?q=%25.${domain}&output=json`);
+        const data = await res.json();
+        const uniqueSubdomains = [...new Set(data.flatMap(entry => entry.name_value.split('\n')))].slice(0, 40);
+        if (uniqueSubdomains.length === 0) {
+          output.innerHTML = '<p class="text-amber-400">No certificates found in CT logs.</p>';
+          return;
+        }
+        output.innerHTML = uniqueSubdomains.map(sub => `<div class="p-1.5 px-2.5 bg-slate-950 rounded border border-slate-800/80 flex justify-between"><span>${sub}</span><span class="text-slate-500">CT Log</span></div>`).join('');
+      } catch (e) {
+        output.innerHTML = '<p class="text-amber-400">crt.sh is currently rate-limiting; use the crt.sh Full Log button above.</p>';
+      }
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const domain = sanitizeDomain(domainInput.value);
+      if (!domain) return;
+      statusBadge.textContent = `Scanning ${domain}...`;
+      statusBadge.className = 'font-mono text-emerald-400 animate-pulse';
+      renderPivotLinks(domain);
+      fetchHeaders(domain);
+      fetchCTLogs(domain);
+      const ip = await fetchDNS(domain);
+      await fetchRDAPAndIP(domain, ip);
+      statusBadge.textContent = `Completed: ${domain}`;
+      statusBadge.className = 'font-mono text-emerald-400';
+    });
+  </script>
+</body>
+</html>
